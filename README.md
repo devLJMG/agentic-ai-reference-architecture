@@ -1,50 +1,116 @@
 # Agentic AI Reference Architecture on AWS
 
-Production-oriented reference architecture for secure Agentic AI workloads on AWS using Amazon Bedrock, AgentCore concepts, RAG, OAuth 2.0/OIDC, memory, private networking and observability.
+Production-oriented reference architecture for **secure multi-agent AI systems** on AWS, combining strategic orchestration, specialized agents, RAG, memory, controlled tool execution, human-in-the-loop governance, private networking and observability.
 
-## Goals
+> This is a sanitized reference architecture and implementation project. It contains no proprietary employer code, customer data, credentials or private infrastructure identifiers.
 
-This repository demonstrates how to design an enterprise-grade agentic AI platform with clear separation between identity, orchestration, retrieval, memory, tools, networking and observability.
+## What this project demonstrates
 
-The focus is not only on making an agent respond, but on documenting the architectural decisions required to operate agentic workloads safely and predictably in production.
+This repository is designed around a central engineering question:
+
+**How do we move from an LLM that answers questions to an AI system that can reason, delegate work, use enterprise data and execute controlled actions safely?**
+
+The architecture separates probabilistic reasoning from deterministic authorization and execution controls.
 
 ## High-level architecture
 
 ```mermaid
-flowchart LR
-    U[User / Client] --> COG[Amazon Cognito\nOAuth 2.0 / OIDC]
-    COG --> GW[Agent Gateway / API Layer]
-    GW --> ORCH[Agent Orchestrator]
+flowchart TB
+    U[React / API / Event Producers] --> AUTH[OAuth 2.0 / OIDC]
+    AUTH --> GW[Validated Gateway]
+    GW --> ORCH[Strategic AI Orchestrator]
 
-    ORCH --> FM[Amazon Bedrock\nFoundation Model]
-    ORCH --> KB[Knowledge Base / RAG]
-    ORCH --> MEM[Agent Memory]
-    ORCH --> TOOLS[Tools / Enterprise APIs]
+    ORCH --> PLAN[Planning + Intent]
+    ORCH --> MEM[Context + Memory]
+    ORCH --> POLICY[Policy + Risk Engine]
+    ORCH --> FM[Amazon Bedrock]
 
+    POLICY -->|Low risk| ROUTER[Agent Router]
+    POLICY -->|High impact| HUMAN[Human Approval]
+    HUMAN --> ROUTER
+
+    ROUTER --> RAG[Knowledge / RAG Agent]
+    ROUTER --> DATA[Data Analyst Agent]
+    ROUTER --> OPS[Operations Agent]
+    ROUTER --> VISION[Vision Agent]
+
+    RAG --> KB[Knowledge Base]
     KB --> S3[(Amazon S3)]
     KB --> OSS[(OpenSearch Serverless)]
 
-    ORCH --> OBS[CloudWatch\nLogs / Metrics / Traces]
-    GW --> OBS
+    DATA --> TOOLS[Controlled Tools / APIs]
+    OPS --> TOOLS
+    VISION --> TOOLS
 
-    subgraph VPC[Private AWS Network]
-        ORCH
-        KB
-        MEM
-        TOOLS
-    end
+    ORCH --> OBS[CloudWatch / Audit / Metrics / Traces]
+    TOOLS --> OBS
+```
+
+## Core capabilities
+
+- **Strategic orchestration** — intent classification, planning, delegation and result aggregation.
+- **Multi-agent execution** — specialized agents operate behind explicit capability boundaries.
+- **Retrieval-Augmented Generation** — enterprise knowledge can ground model reasoning.
+- **Memory architecture** — conversation and durable context are independent concerns.
+- **Decision and risk engine** — deterministic policy evaluates proposed actions before execution.
+- **Human-in-the-loop** — high-impact operations can require explicit approval.
+- **Controlled tool use** — model output never becomes execution authority by itself.
+- **Zero-trust identity** — OAuth 2.0/OIDC and least-privilege access boundaries.
+- **Private networking** — workloads are designed for private AWS connectivity where appropriate.
+- **Observability** — decisions, tool calls, latency, failures and policy events are measurable.
+- **Infrastructure as Code** — deployment infrastructure will be represented through Terraform.
+
+## Decision lifecycle
+
+```text
+Request / Event
+      |
+      v
+Identity + Authorization
+      |
+      v
+Intent Classification
+      |
+      v
+Context + Memory
+      |
+      v
+Planning
+      |
+      v
+Policy / Risk Evaluation
+      |
+      +---- high risk ----> Human Approval
+      |                         |
+      +-------------------------+
+      |
+      v
+Agent Selection
+      |
+      v
+Tool Authorization
+      |
+      v
+Bounded Execution
+      |
+      v
+Result Aggregation
+      |
+      v
+Audit + Metrics + Response
 ```
 
 ## Architecture principles
 
-- **Zero-trust access:** clients authenticate with OAuth 2.0/OIDC before invoking agent capabilities.
-- **Private-by-default networking:** runtime components are designed to operate in private subnets with controlled VPC endpoints.
-- **Least privilege:** IAM permissions are scoped per runtime, tool and data source.
-- **Explicit orchestration:** the agent does not receive unrestricted access to infrastructure or enterprise systems.
-- **Grounded generation:** domain responses can be augmented through RAG and governed data sources.
-- **Durable context:** short- and long-term memory are treated as independent architectural concerns.
-- **Observability first:** prompts, tool calls, latency, errors and security events must be measurable.
-- **Infrastructure as Code:** infrastructure definitions belong in version control.
+- **Model output is untrusted.** A model may propose an operation but cannot authorize it.
+- **Least privilege.** IAM and application permissions are scoped by capability.
+- **Explicit orchestration.** Planning, routing and execution are visible architectural responsibilities.
+- **Deterministic controls around probabilistic reasoning.** Policy enforcement lives outside prompts.
+- **Grounded generation.** RAG uses governed and authorized knowledge sources.
+- **Failure isolation.** Retrieval, memory, models and tools can fail independently.
+- **Observability first.** Correlation IDs connect the complete decision path.
+- **Private by default.** Network exposure is minimized.
+- **Infrastructure as Code.** Infrastructure decisions are reviewable and reproducible.
 
 ## Repository structure
 
@@ -53,8 +119,10 @@ flowchart LR
 ├── README.md
 ├── docs/
 │   ├── architecture.md
+│   ├── multi-agent-orchestration.md
 │   └── decisions/
-│       └── ADR-001-architecture-style.md
+│       ├── ADR-001-architecture-style.md
+│       └── ADR-002-human-in-the-loop.md
 ├── infrastructure/
 │   └── terraform/
 ├── src/
@@ -64,57 +132,94 @@ flowchart LR
     └── workflows/
 ```
 
-## Main components
+## Planned implementation layers
 
-| Layer | Responsibility | AWS-oriented implementation |
-|---|---|---|
-| Identity | Authentication and token issuance | Amazon Cognito |
-| Entry point | Validated access to agent runtime | Agent gateway / API layer |
-| Orchestration | Planning, model invocation and tool routing | Agent runtime / orchestrator |
-| Model | Reasoning and generation | Amazon Bedrock |
-| Retrieval | Grounding against enterprise knowledge | Knowledge Base + OpenSearch Serverless + S3 |
-| Memory | Conversation and durable agent context | Agent memory abstraction |
-| Tools | Controlled execution against external systems | Internal APIs / Lambda / services |
-| Networking | Isolation and private service access | VPC, private subnets, security groups, VPC endpoints |
-| Observability | Logs, metrics, traces and auditability | Amazon CloudWatch |
+| Layer | Responsibility |
+|---|---|
+| API / Events | Receive user requests and machine-generated events |
+| Identity | Authentication and caller context |
+| Orchestrator | Intent, planning, delegation and aggregation |
+| Policy Engine | Risk classification and execution authorization |
+| Model Port | Foundation-model abstraction |
+| Retrieval Port | RAG and governed enterprise knowledge |
+| Memory Port | Session and durable context |
+| Agent Registry | Specialist capability discovery and routing |
+| Tool Registry | Schema validation and controlled side effects |
+| Approval Service | Durable human-in-the-loop workflow |
+| Telemetry | Logs, metrics, traces, audit and evaluation |
+
+## Specialized agents
+
+The architecture currently models four specialist roles:
+
+**Knowledge Agent** — document retrieval, RAG and grounded answers.  
+**Data Analyst Agent** — structured data, metrics and analytical workflows.  
+**Operations Agent** — approved operational actions through controlled tools.  
+**Vision Agent** — computer-vision events and inference results participating in larger decisions.
+
+These roles are intentionally independent from specific frameworks. The orchestration domain should remain understandable even if the underlying agent framework changes.
 
 ## Security model
 
-The target design assumes that no tool is implicitly trusted. Every tool exposed to the orchestrator should have:
+Every executable tool should provide a narrow schema, independent authorization, validated input, bounded execution, timeout behavior, audit events and explicit data permissions.
 
-1. a narrow contract;
-2. its own authorization boundary;
-3. input validation;
-4. audit logging;
-5. timeout and failure handling;
-6. explicit data-access permissions.
+High-impact operations are routed through a policy-driven human approval boundary. See [`ADR-002`](docs/decisions/ADR-002-human-in-the-loop.md).
 
-Secrets and credentials must never be embedded in source code or prompts.
+## Documentation
+
+- [`Architecture`](docs/architecture.md)
+- [`Multi-Agent Orchestration`](docs/multi-agent-orchestration.md)
+- [`ADR-001 — Ports and Adapters`](docs/decisions/ADR-001-architecture-style.md)
+- [`ADR-002 — Human-in-the-Loop`](docs/decisions/ADR-002-human-in-the-loop.md)
 
 ## Roadmap
 
-- [x] Define reference architecture
-- [x] Document architecture principles
-- [x] Add first Architecture Decision Record
-- [ ] Implement local orchestrator skeleton
-- [ ] Add Bedrock model adapter
+### Architecture
+- [x] Define enterprise Agentic AI reference architecture
+- [x] Define multi-agent orchestration model
+- [x] Define trust and execution boundaries
+- [x] Define human-in-the-loop decision boundary
+
+### Runtime
+- [ ] Implement `AgentOrchestrator`
+- [ ] Implement `ModelPort`
+- [ ] Implement `RetrievalPort`
+- [ ] Implement `MemoryPort`
+- [ ] Implement `ToolPort`
+- [ ] Implement agent registry
+- [ ] Implement deterministic policy/risk engine
+- [ ] Add execution budgets, timeouts and idempotency
+
+### AI integrations
+- [ ] Add Amazon Bedrock adapter
 - [ ] Add RAG adapter
-- [ ] Add memory abstraction
-- [ ] Add tool registry
+- [ ] Add durable memory adapter
+- [ ] Add evaluation dataset and agent quality metrics
+
+### Platform
+- [ ] Add React operations console
+- [ ] Add API layer
+- [ ] Add Cognito/OAuth configuration
 - [ ] Add Terraform networking baseline
-- [ ] Add Cognito configuration
-- [ ] Add observability baseline
-- [ ] Add automated tests
+- [ ] Add private connectivity
+- [ ] Add CloudWatch observability
 - [ ] Add GitHub Actions CI
-- [ ] Add threat model and cost notes
+- [ ] Add Docker development environment
+
+### Production engineering
+- [ ] Add automated tests
+- [ ] Add threat model
+- [ ] Add cost model
+- [ ] Add SLOs and operational dashboards
+- [ ] Add failure and recovery scenarios
 
 ## Status
 
-This repository is intentionally built as a reference implementation. Some AWS resources are represented first as architectural abstractions and will be progressively replaced by deployable infrastructure and executable code.
+The project is being built architecture-first: domain boundaries and decisions are documented before concrete cloud adapters are introduced. This keeps the core orchestration testable and prevents the implementation from becoming a collection of tightly coupled SDK calls.
 
 ## Author
 
 **Luciano Gonçalves**  
-Software Engineer — Backend, Cloud Architecture, Data and Artificial Intelligence
+Software Engineer — AI Systems, Backend, Cloud Architecture and Data Engineering
 
 GitHub: [devLJMG](https://github.com/devLJMG)
